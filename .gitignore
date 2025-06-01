@@ -1,0 +1,14 @@
+# Exclude everything in the root
+*
+# Include the Sprites folder and its contents
+!Sprites/
+!Sprites/*
+!Sprites/**
+
+# Include the Lua folder and its contents
+!Lua/
+!Lua/*
+!Lua/**
+
+# Include this .gitignore file
+!.gitignore
