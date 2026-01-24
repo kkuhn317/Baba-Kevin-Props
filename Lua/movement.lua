@@ -4,6 +4,7 @@
 -- specials is a list of objects, that define special attributes that it has like weak, eat, etc
 
 
+-- reason for overriding: heavy property
 function trypush(unitid,ox,oy,dir,pulling_,x_,y_,reason,pusherid)
 	local x,y = 0,0
 	local unit = {}

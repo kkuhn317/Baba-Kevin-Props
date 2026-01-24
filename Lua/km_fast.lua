@@ -23,21 +23,20 @@ editor_objlist["text_fast"] =
 
 formatobjlist() -- (C)
 
-
--- table to hold what objects we need to make fast when they move
-fastobjsleft = {}
+-- table of pairs of objects and reasons that we did the fast change on
+fastdone = {}
 
 -- Hooks here
 
-table.insert(mod_hook_functions["command_given"],
-	function ()
-        fastobjsleft = findallfeature(nil, "is", "fast")
+table.insert(mod_hook_functions["turn_auto"],
+    function()
+        fastdone = {}
     end
 )
 
-table.insert(mod_hook_functions["turn_auto"],
-    function ()
-        fastobjsleft = findallfeature(nil, "is", "fast")
+table.insert(mod_hook_functions["command_given"],
+    function()
+        fastdone = {}
     end
 )
 
@@ -45,19 +44,31 @@ table.insert(mod_hook_functions["movement_take"],
     function(args)
         local moving_units, take = args[1], args[2]
         for i,data in ipairs(moving_units) do
-            local fastness = 0
-            for j = #fastobjsleft, 1, -1 do
-                local v = fastobjsleft[j]
-                if (v == data.unitid) then
-                    fastness = fastness + 1
-                    table.remove(fastobjsleft, j)
+            -- if unitid and reason is in list of fastdone, skip
+            local done = false
+            for j = #fastdone, 1, -1 do
+                if (fastdone[j].unitid == data.unitid) and (fastdone[j].reason == data.reason) then
+                    done = true
                 end
             end
-            print("fastness: " .. tostring(fastness))
-            print("movingdata: " .. tostring(data))
-            print("moving: " .. tostring(i))
-            print("moves left: " .. tostring(data.moves))
-            data.moves = data.moves * (fastness + 1)
+
+            if done == false then
+                table.insert(fastdone, {unitid = data.unitid, reason = data.reason})
+
+                -- figure out how fast it is
+                local fastness = 0
+                fastobjs = findallfeature(nil, "is", "fast")
+                for j = #fastobjs, 1, -1 do
+                    if (fastobjs[j] == data.unitid) then
+                        fastness = fastness + 1
+                    end
+                end
+                -- print("fastness: " .. tostring(fastness))
+                -- print("movingdata: " .. tostring(data))
+                -- print("moving: " .. tostring(i))
+                -- print("moves left: " .. tostring(data.moves))
+                data.moves = data.moves * (fastness + 1)
+            end
         end
     end
 )
