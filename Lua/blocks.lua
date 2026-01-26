@@ -389,7 +389,7 @@ function block(small_)
         -- combine ishelt into hot
         if (hot == nil) then
             hot = helt
-        else
+        elseif (helt ~= nil) then
             for id, unit in ipairs(helt) do
                 table.insert(hot, unit)
             end
