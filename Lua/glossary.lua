@@ -41,6 +41,25 @@ This property can be stacked, so each HEAVY means one extra push/pull is needed.
 If the object is on something else, it will try to move off of it onto an empty space in the following order:
 Forward, Right, Left, Backward]],
             thumbnail = "text_alone"
+        },
+        {
+            base_obj = "friend",
+            display_name = "Friend",
+            text_type = 2,
+            author = "BookwormKevin",
+            description = [[The object cannot move onto empty space.
+If the object is lonely, it will try to move onto an object that's next to it in the following order:
+Forward, Right, Left, Backward]],
+            thumbnail = "text_friend"
+        },
+        {
+            base_obj = "helt",
+            display_name = "Helt",
+            text_type = 2,
+            author = "BookwormKevin",
+            description = [[The object acts like both HOT and MELT.
+However, it does not destroy itself unless it is also HOT or MELT.]],
+            thumbnail = "text_helt"
         }
 
     })
