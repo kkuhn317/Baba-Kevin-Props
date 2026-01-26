@@ -4,7 +4,7 @@
 -- specials is a list of objects, that define special attributes that it has like weak, eat, etc
 
 
--- reason for overriding: add alone movement
+-- reason for overriding: add alone+friend movement
 function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 	statusblock(nil,nil,true)
 	movelist = {}
@@ -386,7 +386,7 @@ function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 						end
 					end
 				end
-				-- NEW SECTION: Check for ALONE movement in the same stage as FEAR
+				-- NEW SECTION: Check for ALONE+FRIEND movement in the same stage as FEAR
 				local alones = getunitswitheffect("alone", false)
 
 				for id,unit in ipairs(alones) do
@@ -419,6 +419,44 @@ function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 								-- move to the first empty space found like this
 								updatedir(unit.fixed, check_dir) -- for some reason wont move in the direction needed unless i do this
 								table.insert(moving_units, {unitid = unit.fixed, reason = "alone", state = 0, moves = 1, dir = check_dir, xpos = x, ypos = y})
+								break
+							end
+						end
+					end
+				end
+
+				local friends = getunitswitheffect("friend", false)
+
+				for id,unit in ipairs(friends) do
+					local x,y,dir = unit.values[XPOS],unit.values[YPOS], unit.values[DIR]
+					local stuff = findallhere(x,y)
+
+					-- find everything on same spot
+					if (#stuff == 1) then	-- theres only 1 object here
+						local ndirs = {
+							[0] = {1, 0},
+							[1] = {0, -1},
+							[2] = {-1, 0},
+							[3] = {0, 1}
+						}
+
+						-- check in front of the object for any object, then to the right, then to the left, then behind
+						local check_order = {
+							dir,                -- Front
+							(dir + 3) % 4,      -- Right
+							(dir + 1) % 4,      -- Left
+							(dir + 2) % 4,      -- Behind
+						}
+
+						for _, check_dir in ipairs(check_order) do
+							local dx, dy = ndirs[check_dir][1], ndirs[check_dir][2]
+							local tx, ty = x + dx, y + dy
+							
+							local obst = findallhere(tx, ty)
+							if (#obst > 0) then
+								-- move to the first occupied space found like this
+								updatedir(unit.fixed, check_dir) -- for some reason wont move in the direction needed unless i do this
+								table.insert(moving_units, {unitid = unit.fixed, reason = "friend", state = 0, moves = 1, dir = check_dir, xpos = x, ypos = y})
 								break
 							end
 						end
@@ -994,7 +1032,7 @@ function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 	end
 end
 
--- reason for overriding: ALONE movement check
+-- reason for overriding: ALONE+FRIEND movement check
 function check(unitid,x,y,dir,pulling_,reason)
 	local pulling = false
 	if (pulling_ ~= nil) then
@@ -1199,6 +1237,13 @@ function check(unitid,x,y,dir,pulling_,reason)
 				table.insert(specials, {2, "weak"})
 			end
 		end
+
+		-- New section: do not allow movement onto empty if FRIEND
+		local friend = hasfeature(name, "is", "friend", unitid, x, y)
+		if (friend ~= nil) then
+			valid = true -- override valid to true
+		end
+		-- End of new section
 		
 		local added = false
 		
@@ -1220,6 +1265,12 @@ function check(unitid,x,y,dir,pulling_,reason)
 			elseif emptystill then
 				estop = 1
 			end
+
+			-- New section: treat empty as stop if we are FRIEND
+			if (friend ~= nil) then
+				estop = 1
+			end
+			-- End of new section
 			
 			if (estop == 1) then
 				localresult = 1
