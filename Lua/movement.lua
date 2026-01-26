@@ -417,6 +417,7 @@ function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 							local obst = findallhere(tx, ty)
 							if (#obst == 0) then
 								-- move to the first empty space found like this
+								updatedir(unit.fixed, check_dir) -- for some reason wont move in the direction needed unless i do this
 								table.insert(moving_units, {unitid = unit.fixed, reason = "alone", state = 0, moves = 1, dir = check_dir, xpos = x, ypos = y})
 								break
 							end
