@@ -1,4 +1,4 @@
--- Add Big to object list
+-- Add to object list
 
 table.insert(editor_objlist_order, "text_alone")
 
