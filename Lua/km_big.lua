@@ -26,16 +26,15 @@ formatobjlist() -- (C)
 
 -- Hooks here
 
-table.insert(mod_hook_functions["effect_once"],
+table.insert(mod_hook_functions["effect_always"],
     function()
-        -- Find all "big" objects
-        local objects = findallfeature(nil, "is", "big", true)
-            
-        -- v is unitid
-        for i,v in ipairs(objects) do
-            local obj = mmf.newObject(v)
-            obj.scaleX = 4
-            obj.scaleY = 4
-        end
+
+        -- set scale for all units based on big prop
+        for i,unit in ipairs(units) do
+            local name = getname(unit)
+			local newscale = hasfeature_count(name,"is","big",unit.fixed) + 1
+            unit.scaleX = newscale * generaldata2.values[ZOOM] * spritedata.values[TILEMULT]
+            unit.scaleY = newscale * generaldata2.values[ZOOM] * spritedata.values[TILEMULT]
+		end
     end
 )
