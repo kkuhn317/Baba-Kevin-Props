@@ -1,4 +1,6 @@
--- Reason for overriding: HELT property logic as part of HOT/MELT
+-- Reason for overriding:
+-- HELT property logic as part of HOT/MELT
+-- NO U integration
 function block(small_)
 	local delthese = {}
 	local doned = {}
@@ -357,13 +359,20 @@ function block(small_)
 						local vunit = mmf.newObject(v)
 						local thistype = vunit.strings[UNITTYPE]
 						if (v ~= unit.fixed) then
-							local pmult,sound = checkeffecthistory("weak")
-							MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
-							removalshort = sound
-							removalsound = 1
-							generaldata.values[SHAKE] = 4
-							table.insert(delthese, unit.fixed)
-							break
+							-- New: check for No U
+							local toDestroy = findwhodies(unit.fixed, v)
+							
+							if (toDestroy ~= nil) then
+								local pmult,sound = checkeffecthistory("weak")
+								MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
+								removalshort = sound
+								removalsound = 1
+								generaldata.values[SHAKE] = 4
+								table.insert(delthese, toDestroy)
+								if (toDestroy == unit.fixed) then
+									break
+								end
+							end
 						end
 					end
 				end
@@ -415,13 +424,20 @@ function block(small_)
                                 end
                             end
 
-                            local pmult,sound = checkeffecthistory("hot")
-                            MF_particles("smoke",x,y,5 * pmult,0,1,1,1)
-                            generaldata.values[SHAKE] = 5
-                            removalshort = sound
-                            removalsound = 9
-                            table.insert(delthese, unit.fixed)
-							break
+							-- Check for No U
+							local toDestroy = findwhodies(unit.fixed, d)
+							
+							if (toDestroy ~= nil) then
+								local pmult,sound = checkeffecthistory("hot")
+								MF_particles("smoke",x,y,5 * pmult,0,1,1,1)
+								generaldata.values[SHAKE] = 5
+								removalshort = sound
+								removalsound = 9
+								table.insert(delthese, toDestroy)
+								if (toDestroy == unit.fixed) then
+									break
+								end
+							end
 						end
                         ::continue::
 					end
@@ -474,12 +490,19 @@ function block(small_)
 							end
 							
 							if doit then
-								local pmult,sound = checkeffecthistory("defeat")
-								MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
-								generaldata.values[SHAKE] = 5
-								removalshort = sound
-								removalsound = 1
-								table.insert(delthese, unit.fixed)
+								-- CHANGED SECTION: check No U property logic
+								local todestroy = findwhodies(unit.fixed, d)
+
+								if (todestroy ~= nil) then
+									print("unit is" .. todestroy)
+									local pmult,sound = checkeffecthistory("defeat")
+									MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
+									generaldata.values[SHAKE] = 5
+									removalshort = sound
+									removalsound = 1
+									table.insert(delthese, todestroy)
+								end
+								-- End of changed section
 							end
 						end
 					end
@@ -546,15 +569,20 @@ function block(small_)
 				if (#things > 0) then
 					for a,b in ipairs(things) do
 						if (issafe(b) == false) and floating(b,unit.fixed,x,y) and (b ~= unit.fixed) and (iseaten[b] == nil) then
-							generaldata.values[SHAKE] = 4
-							table.insert(delthese, b)
+							-- New: check for No U
+							local toDestroy = findwhodies(b, unit.fixed)
 							
-							iseaten[b] = 1
-							
-							local pmult,sound = checkeffecthistory("eat")
-							MF_particles("eat",x,y,5 * pmult,0,3,1,1)
-							removalshort = sound
-							removalsound = 1
+							if (toDestroy ~= nil) then
+								generaldata.values[SHAKE] = 4
+								table.insert(delthese, toDestroy)
+								
+								iseaten[toDestroy] = 1
+								
+								local pmult,sound = checkeffecthistory("eat")
+								MF_particles("eat",x,y,5 * pmult,0,3,1,1)
+								removalshort = sound
+								removalsound = 1
+							end
 						end
 					end
 				end
@@ -720,17 +748,22 @@ function block(small_)
 							if (#flag > 0) then
 								for c,d in ipairs(flag) do
 									if floating(d,unit.fixed,x,y) then
-										local pmult,sound = checkeffecthistory("bonus")
-										MF_particles("bonus",x,y,10 * pmult,4,1,1,1)
-										removalshort = sound
-										removalsound = 2
-										MF_playsound("bonus")
-										MF_bonus(1)
-										addundo({"bonus",1})
+										-- New: check for No U
+										local toDestroy = findwhodies(d, unit.fixed, true)
 										
-										if (issafe(d,x,y) == false) then
-											generaldata.values[SHAKE] = 5
-											table.insert(delthese, d)
+										if (toDestroy ~= nil) then
+											local pmult,sound = checkeffecthistory("bonus")
+											MF_particles("bonus",x,y,10 * pmult,4,1,1,1)
+											removalshort = sound
+											removalsound = 2
+											MF_playsound("bonus")
+											MF_bonus(1)
+											addundo({"bonus",1})
+											
+											if (issafe(toDestroy,x,y) == false) then
+												generaldata.values[SHAKE] = 5
+												table.insert(delthese, toDestroy)
+											end
 										end
 									end
 								end
@@ -810,8 +843,16 @@ function block(small_)
 	
 	for i,unit in ipairs(units) do
 		if (inbounds(unit.values[XPOS],unit.values[YPOS],1) == false) then
-			--MF_alert("DELETED!!!")
-			table.insert(delthese, unit.fixed)
+			-- New part: check for No U on object. if it has it, then destroy level instead lol
+			local uName = unit.strings[UNITNAME]
+			local hasnou = hasfeature(uName,"is","nou",unit.fixed)
+			if (hasnou ~= nil) then
+				-- dont check for level safe because safe doesnt stop oob deletion
+				destroylevel()
+			else
+				--MF_alert("DELETED!!!")
+				table.insert(delthese, unit.fixed)
+			end
 		end
 	end
 	

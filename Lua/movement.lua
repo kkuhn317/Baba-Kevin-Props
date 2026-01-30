@@ -4,7 +4,9 @@
 -- specials is a list of objects, that define special attributes that it has like weak, eat, etc
 
 
--- reason for overriding: add alone+friend movement
+-- reason for overriding:
+-- add alone+friend movement
+-- incorporate no u logic for collision weak+eat
 function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 	statusblock(nil,nil,true)
 	movelist = {}
@@ -884,13 +886,40 @@ function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 												local weak = hasfeature(name,"is","weak",data.unitid,x,y)
 												
 												if (weak ~= nil) and (issafe(data.unitid,x,y) == false) then
-													delete(data.unitid,x,y)
-													generaldata.values[SHAKE] = 3
-													
-													local pmult,sound = checkeffecthistory("weak")
-													MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
-													setsoundname("removal",1,sound)
+													-- Changed: added No U logic for moving into solid object while weak
+													local hasNoU = hasfeature(name, "is", "nou", data.unitid, x, y)
+													if (hasNoU ~= nil) then
+														-- destroy all obstacles preventing movement
+														for c,obs in pairs(obslist) do
+															-- check for solid
+															if (obs > 0) then -- stop is 0, push/pull is > 1 (note: empty is 2)
+																local thisobs = allobs[c]
+																-- check for safe on obstacle
+																if (issafe(thisobs,x,y) == false) then
+																	delete(thisobs,x,y)
+																	generaldata.values[SHAKE] = 3
+																	
+																	local pmult,sound = checkeffecthistory("weak")
+																	MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
+																	setsoundname("removal",1,sound)
+																end
+															elseif (obs == -1) then -- level border
+																-- level safe?
+																if (issafe(1) == false) then
+																	destroylevel("weak")
+																end
+															end
+														end
+													else
+														delete(data.unitid,x,y)
+														generaldata.values[SHAKE] = 3
+														
+														local pmult,sound = checkeffecthistory("weak")
+														MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
+														setsoundname("removal",1,sound)
+													end
 													data.moves = 1
+													
 												end
 												solved = true
 											end
@@ -1421,4 +1450,489 @@ function trypush(unitid,ox,oy,dir,pulling_,x_,y_,reason,pusherid)
 	else
 		return 0
 	end
+end
+
+-- Reason for overriding: No U push/pull logic
+function dopush(unitid,ox,oy,dir,pulling_,x_,y_,reason,pusherid)
+	local pid2 = tostring(ox + oy * roomsizex) .. tostring(unitid)
+	pushedunits[pid2] = 1
+	
+	local x,y = 0,0
+	local unit = {}
+	local name = ""
+	local pushsound = false
+	
+	if (unitid ~= 2) then
+		unit = mmf.newObject(unitid)
+		x,y = unit.values[XPOS],unit.values[YPOS]
+		name = getname(unit)
+	else
+		x = x_
+		y = y_
+		name = "empty"
+	end
+	
+	local pulling = false
+	if (pulling_ ~= nil) then
+		pulling = pulling_
+	end
+	
+	local swaps = findfeatureat(nil,"is","swap",x+ox,y+oy,{"still"})
+	
+	if (swaps ~= nil) and ((unitid ~= 2) or ((unitid == 2) and (pulling == false))) then
+		for a,b in ipairs(swaps) do
+			if (pulling == false) or (pulling and (b ~= pusherid)) then
+				local alreadymoving = findupdate(b,"update")
+				local valid = true
+				
+				if (#alreadymoving > 0) then
+					valid = false
+				end
+				
+				if valid then
+					addaction(b,{"update",x,y,nil})
+				end
+			end
+		end
+	end
+	
+	if pulling then
+		local swap = hasfeature(name,"is","swap",unitid,x,y,{"still"})
+		
+		if swap then
+			local swapthese = findallhere(x+ox,y+oy)
+			
+			for a,b in ipairs(swapthese) do
+				if (b ~= pusherid) then
+					local alreadymoving = findupdate(b,"update")
+					local valid = true
+					
+					if (#alreadymoving > 0) then
+						valid = false
+					end
+					
+					if valid and (b ~= 2) then
+						addaction(b,{"update",x,y,nil})
+						pushsound = true
+					end
+				end
+			end
+		end
+	end
+
+	local hm = 0
+	local tileid = x + y * roomsizex
+	local moveid = tostring(tileid) .. name .. tostring(dir)
+	
+	if (movemap[moveid] == nil) then
+		movemap[moveid] = {}
+	end
+	
+	if (movemap[moveid]["push"] == nil) then
+		movemap[moveid]["push"] = 0
+		movemap[moveid]["pull"] = 0
+		movemap[moveid]["result"] = 0
+	end
+	
+	local movedata = movemap[moveid]
+	
+	if (HACK_MOVES < 10000) then
+		local hmlist,hms,specials = check(unitid,x,y,dir,false,reason)
+		local pullhmlist,pullhms,pullspecials = check(unitid,x,y,dir,true,reason)
+		local result = 0
+		
+		local weak = hasfeature(name,"is","weak",unitid,x_,y_)
+		
+		if (movedata.result == 0) then
+			for i,obs in pairs(hmlist) do
+				local done = false
+				while (done == false) do
+					if (obs == 0) then
+						result = math.max(0, result)
+						done = true
+					elseif (obs == 1) or (obs == -1) then
+						if (pulling == false) or (pulling and (hms[i] ~= pusherid)) then
+							result = math.max(2, result)
+							done = true
+						else
+							result = math.max(0, result)
+							done = true
+						end
+					else
+						if (pulling == false) or (pulling and (hms[i] ~= pusherid)) then
+							result = math.max(1, result)
+							done = true
+						else
+							result = math.max(0, result)
+							done = true
+						end
+					end
+				end
+			end
+			
+			movedata.result = result + 1
+		else
+			result = movedata.result - 1
+			done = true
+		end
+		
+		local finaldone = false
+		
+		while (finaldone == false) and (HACK_MOVES < 10000) do
+			if (result == 0) then
+				table.insert(movelist, {unitid,ox,oy,dir,specials,x,y})
+				--move(unitid,ox,oy,dir,specials)
+				pushsound = true
+				finaldone = true
+				hm = 0
+				
+				if (pulling == false) and (movedata.pull == 0) then
+					for i,obs in ipairs(pullhmlist) do
+						if (obs < -1) or (obs > 1) and (obs ~= pusherid) then
+							if (obs ~= 2) then
+								table.insert(movelist, {obs,ox,oy,dir,pullspecials,x,y})
+								pushsound = true
+								--move(obs,ox,oy,dir,specials)
+							end
+							
+							local pid = tostring(x-ox + (y-oy) * roomsizex) .. tostring(obs)
+							
+							if (pushedunits[pid] == nil) then
+								pushedunits[pid] = 1
+								
+								hm = dopush(obs,ox,oy,dir,true,x-ox,y-oy,reason,unitid)
+							end
+							
+							movedata.pull = 1
+						end
+					end
+				end
+			elseif (result == 1) then
+				if (movedata.push == 0) then
+					for i,v in ipairs(hmlist) do
+						if (v ~= -1) and (v ~= 0) and (v ~= 1) then
+							local pid = tostring(x+ox + (y+oy) * roomsizex) .. tostring(v)
+							
+							if (pulling == false) or (pulling and (hms[i] ~= pusherid)) and (pushedunits[pid] == nil) then
+								pushedunits[pid] = 1
+								hm = dopush(v,ox,oy,dir,false,x+ox,y+oy,reason,unitid)
+							end
+						end
+					end
+				else
+					hm = movedata.push - 1
+				end
+				
+				movedata.push = hm + 1
+				
+				if (hm == 0) then
+					result = 0
+				else
+					result = 2
+				end
+			elseif (result == 2) then
+				hm = 1
+				
+				if (weak ~= nil) then
+					-- Changed: incorporate No U logic for pushing weak obs into obstacles
+					local hasNoU = hasfeature(name, "is", "nou", unitid, x, y)
+					if (hasNoU ~= nil) then
+						for i,v in ipairs(hmlist) do
+							if v == 1 then -- solid obstacle
+								-- obs safe?
+								if (issafe(hms[i]) == false) then
+									delete(hms[i],x,y)
+						
+									local pmult,sound = checkeffecthistory("weak")
+									setsoundname("removal",1,sound)
+									generaldata.values[SHAKE] = 3
+									MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
+								end
+							elseif v == -1 then -- level border
+								-- level safe?
+								if (issafe(1) == false) then
+									destroylevel("weak")
+								end
+							end
+						end
+					else
+						delete(unitid,x,y)
+					
+						local pmult,sound = checkeffecthistory("weak")
+						setsoundname("removal",1,sound)
+						generaldata.values[SHAKE] = 3
+						MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
+						
+					end
+					result = 0
+					hm = 0
+				end
+				
+				finaldone = true
+			end
+		end
+		
+		if pulling and (HACK_MOVES < 10000) then
+			hmlist,hms,specials = check(unitid,x,y,dir,pulling,reason)
+			hm = 0
+		
+			for i,obs in pairs(hmlist) do
+				if (obs < -1) or (obs > 1) then
+					local pid = tostring(x - ox + (y - oy) * roomsizex) .. tostring(obs)
+					
+					if (obs ~= 2) and (pushedunits[pid] == nil) then
+						table.insert(movelist, {obs,ox,oy,dir,specials,x,y})
+						pushsound = true
+					end
+					
+					if (pushedunits[pid] == nil) then
+						pushedunits[pid] = 1
+						hm = dopush(obs,ox,oy,dir,pulling,x-ox,y-oy,reason,unitid)
+					end
+				end
+			end
+			
+			if (movedata.pull == 0) then
+				movedata.pull = hm + 1
+			else
+				hm = movedata.pull - 1
+			end
+		end
+		
+		if pushsound and (generaldata2.strings[TURNSOUND] == "") then
+			setsoundname("turn",5)
+		end
+	end
+	
+	HACK_MOVES = HACK_MOVES + 1
+	
+	return hm
+end
+
+-- Reason for overriding: No U logic with eat
+function move(unitid,ox,oy,dir,specials_,instant_,simulate_,x_,y_)
+	local instant = instant_ or false
+	local simulate = simulate_ or false
+	
+	local x,y = 0,0
+	local unit = {}
+	
+	if (unitid ~= 2) then
+		unit = mmf.newObject(unitid)
+		x,y = unit.values[XPOS],unit.values[YPOS]
+	else
+		x = x_
+		y = y_
+	end
+	
+	local specials = {}
+	if (specials_ ~= nil) then
+		specials = specials_
+	end
+	
+	local gone = false
+	
+	for i,v in pairs(specials) do
+		if (gone == false) then
+			local b = v[1]
+			local reason = v[2]
+			local dodge = false
+			
+			local bx,by = 0,0
+			if (b ~= 2) and (deleted[b] ~= nil) then
+				MF_alert("Already gone")
+				dodge = true
+			elseif (b ~= 2) and (reason ~= "weak") then
+				local bunit = mmf.newObject(b)
+				bx,by = bunit.values[XPOS],bunit.values[YPOS]
+				
+				if (bx ~= x+ox) or (by ~= y+oy) then
+					dodge = true
+				else
+					for c,d in ipairs(movelist) do
+						if (d[1] == b) then
+							local nx,ny = d[2],d[3]
+							
+							--print(tostring(nx) .. "," .. tostring(ny) .. " --> " .. tostring(x+ox) .. "," .. tostring(y+oy) .. " (" .. tostring(bx) .. "," .. tostring(by) .. ")")
+							if (nx ~= x+ox) or (ny ~= y+oy) then
+								dodge = true
+							end
+						end
+					end
+				end
+			else
+				bx,by = x+ox,y+oy
+			end
+			
+			if (dodge == false) then
+				if (reason == "lock") then
+					local unlocked = false
+					local valid = true
+					local soundshort = ""
+					
+					if (b ~= 2) then
+						local bunit = mmf.newObject(b)
+						
+						if bunit.flags[DEAD] then
+							valid = false
+						end
+					end
+					
+					if (unitid ~= 2) and unit.flags[DEAD] then
+						valid = false
+					end
+					
+					if valid then
+						local pmult = 1.0
+						local effect1 = false
+						local effect2 = false
+						
+						if (issafe(b,bx,by) == false) then
+							delete(b,bx,by)
+							unlocked = true
+							effect1 = true
+						end
+						
+						if (issafe(unitid,x,y) == false) then
+							delete(unitid,x,y)
+							unlocked = true
+							gone = true
+							effect2 = true
+						end
+						
+						if effect1 or effect2 then
+							local pmult,sound = checkeffecthistory("unlock")
+							soundshort = sound
+						end
+						
+						if effect1 then
+							MF_particles("unlock",bx,by,15 * pmult,2,4,1,1)
+							generaldata.values[SHAKE] = 8
+						end
+						
+						if effect2 then
+							MF_particles("unlock",x,y,15 * pmult,2,4,1,1)
+							generaldata.values[SHAKE] = 8
+						end
+					end
+					
+					if unlocked then
+						setsoundname("turn",7,soundshort)
+					end
+
+				-- Changed section: incorporate No U with eat (when moving into object that you eat but its no u)
+				elseif (reason == "eat") then
+					local toDestroy = findwhodies(b, unitid)
+
+					if (toDestroy ~= nil) then
+						local pmult,sound = checkeffecthistory("eat")
+						MF_particles("eat",bx,by,10 * pmult,0,3,1,1)
+						generaldata.values[SHAKE] = 3
+						delete(toDestroy,bx,by)
+						
+						setsoundname("removal",1,sound)
+					end
+
+				-- Changed section: incorporate No U with weak empty?
+				elseif (reason == "weak") then
+					if (b == 2) and (unitid ~= 2) then
+						local toDestroy = findwhodies(b, unitid)
+						
+						if (toDestroy ~= nil) then
+							local pmult,sound = checkeffecthistory("weak")
+							MF_particles("destroy",bx,by,5 * pmult,0,3,1,1)
+							generaldata.values[SHAKE] = 3
+							delete(toDestroy,bx,by)
+							
+							setsoundname("removal",1,sound)
+						end
+					end
+				end
+			end
+		end
+	end
+	
+	if (gone == false) and (simulate == false) and (unitid ~= 2) then
+		if instant then
+			update(unitid,x+ox,y+oy,dir)
+			MF_alert("Instant movement on " .. tostring(unitid))
+		else
+			addaction(unitid,{"update",x+ox,y+oy,dir})
+		end
+		
+		if unit.visible and (#movelist < 700) and (spritedata.values[VISION] == 0) then
+			if (generaldata.values[DISABLEPARTICLES] == 0) and (generaldata5.values[LEVEL_DISABLEPARTICLES] == 0) then
+				local effectid = MF_effectcreate("effect_bling")
+				local effect = mmf.newObject(effectid)
+				
+				local midxdelta = spritedata.values[XMIDTILE] - roomsizex * 0.5
+				local midydelta = spritedata.values[YMIDTILE] - roomsizey * 0.5
+				local midx = roomsizex * 0.5 + midxdelta * generaldata2.values[ZOOM]
+				local midy = roomsizey * 0.5 + midydelta * generaldata2.values[ZOOM]
+				local mx = x - midx
+				local my = y - midy
+				
+				local c1,c2 = 0,0
+				
+				if (unit.colour ~= nil) and (unit.colour[1] ~= nil) and (unit.colour[2] ~= nil) then
+					c1 = unit.colour[1]
+					c2 = unit.colour[2]
+				else
+					if (unit.active == false) then
+						c1,c2 = getcolour(unitid)
+					else
+						c1,c2 = getcolour(unitid,"active")
+					end
+				end
+				MF_setcolour(effectid,c1,c2)
+				
+				local xvel,yvel = 0,0
+				
+				if (ox ~= 0) then
+					xvel = 0 - ox / math.abs(ox)
+				end
+				
+				if (oy ~= 0) then
+					yvel = 0 - oy / math.abs(oy)
+				end
+				
+				local dx = mx + 0.5
+				local dy = my + 0.75
+				local dxvel = xvel
+				local dyvel = yvel
+				
+				if (generaldata2.values[ROOMROTATION] == 90) then
+					dx = my + 0.75
+					dy = 0 - mx - 0.5
+					dxvel = yvel
+					dyvel = 0 - xvel
+				elseif (generaldata2.values[ROOMROTATION] == 180) then
+					dx = 0 - mx - 0.5
+					dy = 0 - my - 0.75
+					dxvel = 0 - xvel
+					dyvel = 0 - yvel
+				elseif (generaldata2.values[ROOMROTATION] == 270) then
+					dx = 0 - my - 0.75
+					dy = mx + 0.5
+					dxvel = 0 - yvel
+					dyvel = xvel
+				end
+				
+				effect.values[ONLINE] = 3
+				effect.values[XPOS] = Xoffset + (midx + (dx) * generaldata2.values[ZOOM]) * tilesize * spritedata.values[TILEMULT]
+				effect.values[YPOS] = Yoffset + (midy + (dy) * generaldata2.values[ZOOM]) * tilesize * spritedata.values[TILEMULT]
+				effect.scaleX = generaldata2.values[ZOOM] * spritedata.values[TILEMULT]
+				effect.scaleY = generaldata2.values[ZOOM] * spritedata.values[TILEMULT]
+				
+				effect.values[XVEL] = dxvel * math.random(10,30) * 0.1 * spritedata.values[TILEMULT] * generaldata2.values[ZOOM]
+				effect.values[YVEL] = dyvel * math.random(10,30) * 0.1 * spritedata.values[TILEMULT] * generaldata2.values[ZOOM]
+			end
+			
+			if (unit.values[TILING] == 2) then
+				unit.values[VISUALDIR] = ((unit.values[VISUALDIR] + 1) + 4) % 4
+			end
+		end
+	end
+	
+	return gone
 end
