@@ -1867,6 +1867,7 @@ function levelblock()
 							end
 						end
 					elseif (action == "weak") then
+						local destUnits = {}
 						for i,unit in ipairs(units) do
 							local name = unit.strings[UNITNAME]
 							if (unit.strings[UNITTYPE] == "text") then
@@ -1877,17 +1878,20 @@ function levelblock()
 							if floating_level(unit.fixed) and (lsafe == false) then
 								if (lnou == true) then
 									if (issafe(unit.fixed) == false) then
-										-- todo: currently only half of the objects are getting destroyed??
-										local pmult,sound = checkeffecthistory("weak")
-										MF_particles("destroy",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,3,1,1)
-										setsoundname("removal",1,sound)
-										generaldata.values[SHAKE] = 2
-										delete(unit.fixed)
+										table.insert(destUnits, unit.fixed)
 									end
 								else
 									destroylevel()
 								end
 							end
+						end
+						for i,uid in ipairs(destUnits) do
+							local unit = mmf.newObject(uid)
+							local pmult,sound = checkeffecthistory("weak")
+							MF_particles("destroy",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,3,1,1)
+							setsoundname("removal",1,sound)
+							generaldata.values[SHAKE] = 2
+							delete(unit.fixed)
 						end
                     -- MOVED HOT/MELT section to top
 					elseif (action == "open") then
