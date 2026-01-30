@@ -494,7 +494,6 @@ function block(small_)
 								local todestroy = findwhodies(unit.fixed, d)
 
 								if (todestroy ~= nil) then
-									print("unit is" .. todestroy)
 									local pmult,sound = checkeffecthistory("defeat")
 									MF_particles("destroy",x,y,5 * pmult,0,3,1,1)
 									generaldata.values[SHAKE] = 5
@@ -873,7 +872,9 @@ function block(small_)
 	end
 end
 
--- reason for overriding: make HELT work with LEVEL
+-- reason for overriding:
+-- make HELT work with LEVEL
+-- No U destroylevel logic
 function levelblock()
 	local unlocked = false
 	local things = {}
@@ -902,6 +903,8 @@ function levelblock()
 		local lstill = isstill_or_locked(1,nil,nil,mapdir)
 		local lsleep = issleep(1)
 		local lsafe = issafe(1)
+		local lnou = hasfeature("level","is","nou") ~= nil
+		local levelbonusget = false
 		local emptybonus = false
 		local emptydone = false
 		
@@ -917,6 +920,7 @@ function levelblock()
 					
 					if (unitmap[tileid] == nil) or (#unitmap[tileid] == 0) then
 						local esafe = issafe(2,i,j)
+						local enou = hasfeature("empty","is","nou",2,i,j) ~= nil
 						
 						--MF_alert(tostring(i) .. ", " .. tostring(j))
 						local keypair = ""
@@ -935,8 +939,11 @@ function levelblock()
 						local unlock = false
 						local victory = false
 						local melt = false
+						local meltfromlevel = false
 						local defeat = false
+						local defeatfromlevel = false
 						local bonus = false
+						local bonusfromlevel = false
 						local ending = false
 						local emptyboom = false
 						
@@ -1067,12 +1074,12 @@ function levelblock()
 								
                                 -- chaged section: let level is HELT work with empty is MELT/HELT
 								if canmelt and ((hasfeature("level","is","hot",1,i,j) ~= nil) or (hasfeature("level","is","helt",1,i,j) ~= nil)) and floating_level(2,i,j) then
-									melt = true
+									meltfromlevel = true
 								end
                                 --- end
 								
 								if candefeat and (hasfeature("level","is","defeat",1,i,j) ~= nil) and floating_level(2,i,j) then
-									defeat = true
+									defeatfromlevel = true
 								end
 								
 								if canwin and (hasfeature("level","is","win",1,i,j) ~= nil) and floating_level(2,i,j) then
@@ -1080,7 +1087,7 @@ function levelblock()
 								end
 								
 								if canbonus and ((hasfeature("level","is","you",1,i,j) ~= nil) or (hasfeature("level","is","you2",1,i,j) ~= nil) or (hasfeature("level","is","3d",1,i,j) ~= nil)) and floating_level(2,i,j) then
-									bonus = true
+									bonusfromlevel = true
 								end
 								
 								if canend and ((hasfeature("level","is","you",1,i,j) ~= nil) or (hasfeature("level","is","you2",1,i,j) ~= nil) or (hasfeature("level","is","3d",1,i,j) ~= nil)) and floating_level(2,i,j) then
@@ -1094,12 +1101,18 @@ function levelblock()
 								if ending then
 									table.insert(eendtiles, {i,j})
 								end
+
+							-- Changed: Incorporate No U into EMPTY EAT LEVEL
 							elseif (rule[2] == "eat") and (rule[3] == "level") and (lsafe == false) then
 								if testcond(conds,2,i,j) and floating_level(2,i,j) then
-									local pmult,sound = checkeffecthistory("eat")
-									setsoundname("removal",1,sound)
-									destroylevel()
-									return
+									if (lnou == true and esafe == false) then
+										table.insert(edelthese, {i,j})
+									else
+										local pmult,sound = checkeffecthistory("eat")
+										setsoundname("removal",1,sound)
+										destroylevel()
+										return
+									end
 								end
 							end
 						end
@@ -1183,6 +1196,27 @@ function levelblock()
 							alive = false
 							table.insert(edelthese, {i,j})
 						end
+
+						-- Changed: add No U logic to empty melt from empty or level
+						if meltfromlevel and (esafe == false) and alive then
+							if (enou == true) then
+								if (lsafe == false) then
+									local pmult,sound = checkeffecthistory("hot")
+									setsoundname("removal",1,sound)
+									destroylevel()
+									return
+								end
+							else
+								setsoundname("turn",9)
+								
+								if (math.random(1,4) == 1) then
+									MF_particles("smoke",i,j,1,0,1,1,1)
+								end
+								
+								alive = false
+								table.insert(edelthese, {i,j})
+							end
+						end
 						
 						if defeat and (esafe == false) and alive then
 							setsoundname("turn",1)
@@ -1193,6 +1227,22 @@ function levelblock()
 							
 							alive = false
 							table.insert(edelthese, {i,j})
+						end
+
+						-- Added no u logic for level is defeat + empty is you
+						if defeatfromlevel and (esafe == false) and alive then
+							if (enou == true) then
+								if (lsafe == false) then destroylevel() end
+							else
+								setsoundname("turn",1)
+								
+								if (math.random(1,4) == 1) then
+									MF_particles("destroy",i,j,1,0,3,1,1)
+								end
+								
+								alive = false
+								table.insert(edelthese, {i,j})
+							end
 						end
 						
 						if bonus and (esafe == false) then
@@ -1212,6 +1262,35 @@ function levelblock()
 								MF_bonus(1)
 								addundo({"bonus",1})
 								emptybonus = true
+							end
+						end
+
+						-- Added no u logic for empty is bonus and level is you
+						if bonusfromlevel and (esafe == false) then
+							if (enou == true) then
+								levelbonusget = true
+								if (lsafe == false) then
+									destroylevel("bonus")
+									return
+								end
+							else
+								if alive then
+									setsoundname("turn",2)
+									
+									if (math.random(1,4) == 1) then
+										MF_particles("win",i,j,1,4,2,1,1)
+									end
+									
+									alive = false
+									table.insert(edelthese, {i,j})
+								end
+								
+								if (emptybonus == false) then
+									MF_playsound("bonus")
+									MF_bonus(1)
+									addundo({"bonus",1})
+									emptybonus = true
+								end
 							end
 						end
 						
@@ -1280,11 +1359,19 @@ function levelblock()
 				end
 			end
 		end
+
+		-- add additional bonusget sound block here
+		if levelbonusget then
+			MF_playsound("bonus")
+			MF_bonus(1)
+			addundo({"bonus",1})
+		end
 		
 		if (#things > 0) then
 			for i,rules in ipairs(things) do
 				local rule = rules[1]
 				local conds = rules[2]
+				local bonusget = false -- move up here instead of just being in level is bonus section
 				
 				--MF_alert(rule[1] .. " " .. rule[2] .. " " .. rule[3] .. ", " .. tostring(testcond(conds,1)))
 				
@@ -1305,6 +1392,7 @@ function levelblock()
 							
 							for c,d in ipairs(dothese) do
 								if (unitlists[d] ~= nil) then
+									-- level eat level
 									if (d == "level") and (#unitlists["level"] > 0) and (lsafe == false) then
 										local pmult,sound = checkeffecthistory("eat")
 										setsoundname("removal",1,sound)
@@ -1312,9 +1400,23 @@ function levelblock()
 										return
 									end
 									
+									-- Changed: add no u logic for level eat obj
 									for a,unitid in ipairs(unitlists[d]) do
 										if (issafe(unitid) == false) then
-											table.insert(eaten, unitid)
+											local unit = mmf.newObject(unitid)
+											local uName = unit.strings[UNITNAME]
+											local hasnou = hasfeature(uName,"is","nou",unitid)
+											if (hasnou ~= nil) then
+												-- destroy level instead
+												if (lsafe == false) then
+													local pmult,sound = checkeffecthistory("eat")
+													setsoundname("removal",1,sound)
+													destroylevel()
+													return
+												end
+											else
+												table.insert(eaten, unitid)
+											end
 										end
 									end
 								end
@@ -1322,32 +1424,63 @@ function levelblock()
 						elseif (target == "empty") then
 							local empties = findempty()
 							
+							-- Changed: add no u logic for level eat empty
 							for a,b in ipairs(empties) do
 								local x = b % roomsizex
 								local y = math.floor(b / roomsizex)
+
+								if hasfeature("empty","is","nou",2,x,y) ~= nil then
+									-- destroy level instead
+									if (lsafe == false) then
+										local pmult,sound = checkeffecthistory("eat")
+										setsoundname("removal",1,sound)
+										destroylevel()
+										return
+									end
+								else
+									generaldata.values[SHAKE] = 4
 								
-								generaldata.values[SHAKE] = 4
-							
-								local pmult,sound = checkeffecthistory("eat")
-								MF_particles("eat",x,y,5 * pmult,0,3,1,1)
-								setsoundname("removal",1,sound)
-								
-								delete(2,x,y)
+									local pmult,sound = checkeffecthistory("eat")
+									MF_particles("eat",x,y,5 * pmult,0,3,1,1)
+									setsoundname("removal",1,sound)
+									
+									delete(2,x,y)
+								end
 							end
 						end
 					elseif (rule[1] ~= "level") and (rule[3] == "level") then
 						local dothese = {}
+						local onempty = false
 						if (findnoun(rule[1]) == false) or (rule[1] == "text") then
-							dothese = findall({rule[1],conds},nil,true)
+							dothese = findall({rule[1],conds},nil) -- removed test param so it gets all
 						elseif (rule[1] == "empty") then
-							dothese = findempty(conds,true)
+							dothese = findempty(conds) -- removed test param so it gets all
+							onempty = true
 						end
 							
+						-- Changed: Add No U logic for obj/empty eat level
 						if (#dothese > 0) and (lsafe == false) then
-							local pmult,sound = checkeffecthistory("eat")
-							setsoundname("removal",1,sound)
-							destroylevel()
-							return
+							if (lnou == true) then
+								for a,b in ipairs(dothese) do
+									if (onempty == true) then
+										if (issafe(2,i,j) == false) then
+											local x = b % roomsizex
+											local y = math.floor(b / roomsizex)
+											local pmult,sound = checkeffecthistory("eat")
+											MF_particles("eat",x,y,5 * pmult,0,3,1,1)
+											setsoundname("removal",1,sound)
+											delete(2,x,y)
+										end
+									else
+										table.insert(eaten, b)
+									end
+								end
+							else
+								local pmult,sound = checkeffecthistory("eat")
+								setsoundname("removal",1,sound)
+								destroylevel()
+								return
+							end
 						end
 					end
 						
@@ -1388,13 +1521,21 @@ function levelblock()
 								if (#allmelts > 0) then
 									for c,d in ipairs(allmelts) do
 										if (issafe(d) == false) and floating_level(d) then
+											-- Changed: added no u logic for level is hot + obj is melt
 											local unit = mmf.newObject(d)
-											
-											local pmult,sound = checkeffecthistory("hot")
-											MF_particles("smoke",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,1,1,1)
-											generaldata.values[SHAKE] = 2
-											setsoundname("removal",9,sound)
-											delete(d)
+											local uName = unit.strings[UNITNAME]
+											local hasnou = hasfeature(uName,"is","nou",d)
+											if (hasnou ~= nil) then
+												if (lsafe == false) then
+													destroylevel()
+												end
+											else
+												local pmult,sound = checkeffecthistory("hot")
+												MF_particles("smoke",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,1,1,1)
+												generaldata.values[SHAKE] = 2
+												setsoundname("removal",9,sound)
+												delete(d)
+											end
 										end
 									end
 								end
@@ -1422,7 +1563,22 @@ function levelblock()
 								end
 								
 								if doit then
-									destroylevel()
+									-- Changed: added no u logic for level is melt and no u
+									if (lnou == true) then
+										local allhots = findall(b)
+										for c,d in ipairs(allhots) do
+											if (issafe(d) == false) then
+												local unit = mmf.newObject(d)
+												local pmult,sound = checkeffecthistory("hot")
+												MF_particles("smoke",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,1,1,1)
+												generaldata.values[SHAKE] = 2
+												setsoundname("removal",9,sound)
+												delete(d)
+											end
+										end
+									else
+										destroylevel()
+									end
 								end
 							end
 						end
@@ -1446,14 +1602,48 @@ function levelblock()
 								end
 								
 								if doit then
-									destroylevel()
+									-- Changed: added no u logic for level is melt and no u
+									if (lnou == true) then
+										local allhelts = findall(b)
+										for c,d in ipairs(allhelts) do
+											if (issafe(d) == false) then
+												local unit = mmf.newObject(d)
+												local pmult,sound = checkeffecthistory("hot")
+												MF_particles("smoke",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,1,1,1)
+												generaldata.values[SHAKE] = 2
+												setsoundname("removal",9,sound)
+												delete(d)
+											end
+										end
+									else
+										destroylevel()
+									end
 								end
 							end
 						end
 						
-						if (#findallfeature("empty","is","hot") > 0 or #findallfeature("empty","is","helt") > 0) and floating_level(2) and (lsafe == false) then
-							destroylevel()
-							return
+						-- Changed: Completely reworked section to add no u logic for empty is hot/helt, level is melt and no u
+						local empties = findempty()
+						for a,b in ipairs(empties) do
+							local x = b % roomsizex
+							local y = math.floor(b / roomsizex)
+							local hotempty = hasfeature("empty","is","hot",2,x,y)
+							local heltempty = hasfeature("empty","is","helt",2,x,y)
+							
+							if (hotempty ~= nil or heltempty ~= nil) and floating_level(2) and (lsafe == false) then
+								if (lnou) then
+									if (issafe(2,x,y) == false) then
+										setsoundname("turn",9)
+										if (math.random(1,4) == 1) then
+											MF_particles("smoke",x,y,1,0,1,1,1)
+										end
+										delete(2,x,y)
+									end
+								else
+									destroylevel()
+									return
+								end
+							end
 						end
                     end
                     -- end of changed section
@@ -1472,8 +1662,20 @@ function levelblock()
 									if (#allyous > 0) then
 										for c,d in ipairs(allyous) do
 											if (issafe(1) == false) and floating_level(d) then
-												destroylevel()
-												return
+												-- Changed: Add no u logic for level is you, obj is defeat
+												if (lnou == true) then
+													if (issafe(d)==false) then
+														local unit = mmf.newObject(d)
+														local pmult,sound = checkeffecthistory("defeat")
+														MF_particles("destroy",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,3,1,1)
+														setsoundname("removal",1,sound)
+														generaldata.values[SHAKE] = 2
+														delete(d)
+													end
+												else
+													destroylevel()
+													return
+												end
 											end
 										end
 									end
@@ -1483,10 +1685,28 @@ function levelblock()
 								end
 							end
 						end
-						
+
+						-- Changed: add no u logic for empty is defeat, level is you and no u
 						if (#findallfeature("empty","is","defeat") > 0) and floating_level(2) and (lsafe == false) then
-							destroylevel()
-							return
+							if (lnou) then
+								-- destroy all eligible empties
+								local empties = findempty()
+								for a,b in ipairs(empties) do
+									local x = b % roomsizex
+									local y = math.floor(b / roomsizex)
+									local defeatempty = hasfeature("empty","is","defeat",2,x,y)
+									if (defeatempty ~= nil and issafe(2,x,y) == false) then
+										setsoundname("turn",1)
+										if (math.random(1,4) == 1) then
+											MF_particles("destroy",x,y,1,0,3,1,1)
+										end
+										delete(2,x,y)
+									end
+								end
+							else
+								destroylevel()
+								return
+							end
 						end
 						
 						local canwin = false
@@ -1536,15 +1756,26 @@ function levelblock()
 								if (#allbonus > 0) then
 									for c,d in ipairs(allbonus) do
 										if (issafe(d) == false) and floating_level(d) then
+											-- Changed: add no u logic for obj is bonus, level is you
 											local unit = mmf.newObject(d)
-											
-											local pmult,sound = checkeffecthistory("bonus")
-											MF_particles("bonus",unit.values[XPOS],unit.values[YPOS],10 * pmult,4,1,1,1)
-											MF_playsound("bonus")
-											canbonus = true
-											generaldata.values[SHAKE] = 2
-											setsoundname("removal",2,sound)
-											delete(d)
+											local uName = unit.strings[UNITNAME]
+											local hasNoU = hasfeature(uName,"is","nou",d)
+
+											if (hasNoU ~= nil) then
+												bonusget = true
+												if (lsafe == false) then
+													destroylevel("bonus")
+													return
+												end
+											else
+												local pmult,sound = checkeffecthistory("bonus")
+												MF_particles("bonus",unit.values[XPOS],unit.values[YPOS],10 * pmult,4,1,1,1)
+												MF_playsound("bonus")
+												canbonus = true
+												generaldata.values[SHAKE] = 2
+												setsoundname("removal",2,sound)
+												delete(d)
+											end
 										end
 									end
 								end
@@ -1610,16 +1841,25 @@ function levelblock()
 									if (#allyous > 0) then
 										for c,d in ipairs(allyous) do
 											if (issafe(d) == false) and floating_level(d) then
+												-- Changed: add no u logic for level is defeat, obj is you
 												local unit = mmf.newObject(d)
-												
-												local pmult,sound = checkeffecthistory("defeat")
-												MF_particles("destroy",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,3,1,1)
-												setsoundname("removal",1,sound)
-												generaldata.values[SHAKE] = 2
-												delete(d)
+												local uName = unit.strings[UNITNAME]
+												local hasnou = hasfeature(uName,"is","nou",unit.fixed)
+												if (hasnou ~= nil) then
+													if (lsafe == false) then
+														destroylevel()
+													end
+												else
+													local pmult,sound = checkeffecthistory("defeat")
+													MF_particles("destroy",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,3,1,1)
+													setsoundname("removal",1,sound)
+													generaldata.values[SHAKE] = 2
+													delete(d)
+												end
 											end
 										end
 									end
+								-- level is you and defeat
 								elseif testcond(b[2],1) and (lsafe == false) then
 									destroylevel()
 									return
@@ -1633,8 +1873,20 @@ function levelblock()
 								name = "text"
 							end
 							
+							-- Change: Add no u logic to level is weak
 							if floating_level(unit.fixed) and (lsafe == false) then
-								destroylevel()
+								if (lnou == true) then
+									if (issafe(unit.fixed) == false) then
+										-- todo: currently only half of the objects are getting destroyed??
+										local pmult,sound = checkeffecthistory("weak")
+										MF_particles("destroy",unit.values[XPOS],unit.values[YPOS],5 * pmult,0,3,1,1)
+										setsoundname("removal",1,sound)
+										generaldata.values[SHAKE] = 2
+										delete(unit.fixed)
+									end
+								else
+									destroylevel()
+								end
 							end
 						end
                     -- MOVED HOT/MELT section to top
@@ -1845,8 +2097,7 @@ function levelblock()
 						local yous = findfeature(nil,"is","you")
 						local yous2 = findfeature(nil,"is","you2")
 						local yous3 = findfeature(nil,"is","3d")
-						
-						local bonusget = false
+						local canbonus = false -- if object gets bonused instead via no u
 						
 						if (yous == nil) then
 							yous = {}
@@ -1872,15 +2123,29 @@ function levelblock()
 									if (#allyous > 0) then
 										for c,d in ipairs(allyous) do
 											if floating_level(d) then
-												bonusget = true
-												
-												if (lsafe == false) then
-													destroylevel("bonus")
-													return
+												-- Changed: add no u logic for level is bonus, obj is you
+												if (lnou == true) then
+													if (issafe(d)==false) then
+														local pmult,sound = checkeffecthistory("bonus")
+														local unit = mmf.newObject(d)
+														MF_particles("bonus",unit.values[XPOS],unit.values[YPOS],10 * pmult,4,1,1,1)
+														canbonus = true
+														generaldata.values[SHAKE] = 2
+														setsoundname("removal",2,sound)
+														delete(d)
+													end
+												else
+													bonusget = true
+													
+													if (lsafe == false) then
+														destroylevel("bonus")
+														return
+													end
 												end
 											end
 										end
 									end
+								-- level is bonus and you
 								elseif testcond(b[2],1) then
 									bonusget = true
 									
@@ -1893,19 +2158,39 @@ function levelblock()
 						end
 						
 						if ((#findallfeature("empty","is","you") > 0) or (#findallfeature("empty","is","you2") > 0) or (#findallfeature("empty","is","3d") > 0)) and floating_level(2) then
-							bonusget = true
-							
 							if (lsafe == false) then
-								destroylevel("bonus")
-								return
+								-- Changed: add no u logic to level is bonus, empty is you
+								if (lnou == true) then
+									-- bonus all eligible empties
+									local empties = findempty()
+									for a,b in ipairs(empties) do
+										local x = b % roomsizex
+										local y = math.floor(b / roomsizex)
+										local youempty = hasfeature("empty","is","you",2,x,y)
+										if (youempty ~= nil and issafe(2,x,y) == false) then
+											canbonus = true
+											if (math.random(1,4) == 1) then
+												MF_particles("win",x,y,1,4,2,1,1)
+											end
+											delete(2,x,y)
+										end
+									end
+								else
+									destroylevel("bonus")
+									return
+								end
+							else
+								-- if level is bonus and safe, then still get the bonus
+								bonusget = true
 							end
 						end
-						
-						if bonusget then
+
+						if (canbonus == true) then
 							MF_playsound("bonus")
 							MF_bonus(1)
 							addundo({"bonus",1})
 						end
+
 					elseif (action == "win") then
 						local yous = findfeature(nil,"is","you")
 						local yous2 = findfeature(nil,"is","you2")
@@ -2223,6 +2508,13 @@ function levelblock()
 						MF_levelrotation(maprotation)
 					elseif (action == "empty") then
 						destroylevel("empty")
+					end
+
+					-- Change: move bonusget sound down here so it works more globally
+					if bonusget then
+						MF_playsound("bonus")
+						MF_bonus(1)
+						addundo({"bonus",1})
 					end
 				end
 			end
