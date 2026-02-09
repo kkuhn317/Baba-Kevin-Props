@@ -41,7 +41,6 @@ table.insert(mod_hook_functions["level_start"],
 
 table.insert(mod_hook_functions["effect_once"],
     function()
-        print("effect once")
         -- Copy the last entry in heavy_objects (shallow copy)
         local last = heavy_objects[#heavy_objects]
         local copy = {}
@@ -56,7 +55,6 @@ table.insert(mod_hook_functions["effect_once"],
 
 table.insert(mod_hook_functions["undoed_after"],
     function ()
-        print("undoed after")
         for i = 1, 2 do
             table.remove(heavy_objects)
         end

@@ -26,18 +26,101 @@ formatobjlist() -- (C)
 
 -- Hooks here
 
+blindobjs = {}
+
+
+table.insert(mod_hook_functions["level_start"],
+	function()
+        blindobjs = {}
+		local blind = getunitswitheffect("blind",false)
+
+		local blinds = {}
+			
+		-- add initial blindobjs
+		for id,unit in ipairs(blind) do
+			if (blinds[unit.fixed] == nil) then
+				-- change sprite
+				local name = getname(unit)
+				MF_changesprite(unit.fixed, name .."_blind", false)
+				blinds[unit.fixed] = true
+			end
+		end
+        table.insert(blindobjs, blinds)
+	end
+)
 
 table.insert(mod_hook_functions["effect_once"],
     function()
-		-- TODO: make this work with undo and make it not as laggy
-        -- for i,unit in ipairs(units) do
-        --     local name = getname(unit)
-		-- 	local blind = hasfeature(name,"is","blind",unit.fixed)
-		-- 	if (blind ~= nil) then
-		-- 		MF_changesprite(unit.fixed, name .."_blind", false)
-		-- 	else
-		-- 		MF_changesprite(unit.fixed, name, true)
-		-- 	end
-		-- end
+ 		-- Copy the last entry in blindobjs
+        local last = blindobjs[#blindobjs]
+        local copy = {}
+        if last then
+            for k, v in pairs(last) do
+                copy[k] = v
+            end
+        end
+        table.insert(blindobjs, copy)
+
+		local blinds = blindobjs[#blindobjs]
+
+		local removeblind = {}
+		for unitid, real in pairs(blinds) do
+			print("blind obj")
+			removeblind[unitid] = true
+		end
+		
+		local blind = getunitswitheffect("blind",false)
+			
+		for id,unit in ipairs(blind) do
+			removeblind[unit.fixed] = nil
+			if (blinds[unit.fixed] == nil) then
+				-- change sprite
+				local name = getname(unit)
+				MF_changesprite(unit.fixed, name .."_blind", false)
+				blinds[unit.fixed] = true
+			end
+		end
+
+		for unitid, real in pairs(removeblind) do
+			if (real == true) then
+				local unit = mmf.newObject(unitid)
+				local name = getname(unit)
+				MF_changesprite(unitid, name, true)
+				blinds[unitid] = nil
+			end
+		end
+    end
+)
+
+table.insert(mod_hook_functions["undoed_after"],
+    function ()
+		if (#blindobjs <= 1) then
+			return
+		end
+
+		local blinds = blindobjs[#blindobjs]
+		local prevblinds = blindobjs[#blindobjs - 1]
+
+
+		for unitid, real in pairs(prevblinds) do
+			-- if not in blinds, add blind sprites back
+			if (blinds[unitid] == nil) then
+				local unit = mmf.newObject(unitid)
+				local name = getname(unit)
+				MF_changesprite(unit.fixed, name .."_blind", false)
+			end
+		end
+
+		for unitid, real in pairs(blinds) do
+			-- if not in prevblinds, remove blind sprites
+			if (prevblinds[unitid] == nil) then
+				local unit = mmf.newObject(unitid)
+				local name = getname(unit)
+				MF_changesprite(unitid, name, true)
+			end
+		end
+
+		-- remove last entry
+		table.remove(blindobjs)
     end
 )
