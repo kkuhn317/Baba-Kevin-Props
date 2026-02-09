@@ -25,3 +25,19 @@ formatobjlist() -- (C)
 
 
 -- Hooks here
+
+
+table.insert(mod_hook_functions["effect_once"],
+    function()
+		-- TODO: make this work with undo and make it not as laggy
+        -- for i,unit in ipairs(units) do
+        --     local name = getname(unit)
+		-- 	local blind = hasfeature(name,"is","blind",unit.fixed)
+		-- 	if (blind ~= nil) then
+		-- 		MF_changesprite(unit.fixed, name .."_blind", false)
+		-- 	else
+		-- 		MF_changesprite(unit.fixed, name, true)
+		-- 	end
+		-- end
+    end
+)
