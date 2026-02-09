@@ -392,36 +392,42 @@ function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 				local alones = getunitswitheffect("alone", false)
 
 				for id,unit in ipairs(alones) do
-					local x,y,dir = unit.values[XPOS],unit.values[YPOS], unit.values[DIR]
+					local x,y,dir,name = unit.values[XPOS],unit.values[YPOS], unit.values[DIR], unit.strings[UNITNAME]
 					local stuff = findallhere(x,y)
 
 					-- find everything on same spot
 					if (#stuff > 1) then	-- theres more than 1 object here
-						local ndirs = {
-							[0] = {1, 0},
-							[1] = {0, -1},
-							[2] = {-1, 0},
-							[3] = {0, 1}
-						}
+						-- if blind, just go forward
+						if (hasfeature(name, "is", "blind", unit.fixed, x, y) ~= nil) then
+							updatedir(unit.fixed, dir) -- for some reason wont move in the direction needed unless i do this
+							table.insert(moving_units, {unitid = unit.fixed, reason = "alone", state = 0, moves = 1, dir = dir, xpos = x, ypos = y})
+						else
+							local ndirs = {
+								[0] = {1, 0},
+								[1] = {0, -1},
+								[2] = {-1, 0},
+								[3] = {0, 1}
+							}
 
-						-- check in front of the object for any object, then to the right, then to the left, then behind
-						local check_order = {
-							dir,                -- Front
-							(dir + 3) % 4,      -- Right
-							(dir + 1) % 4,      -- Left
-							(dir + 2) % 4,      -- Behind
-						}
+							-- check in front of the object for any object, then to the right, then to the left, then behind
+							local check_order = {
+								dir,                -- Front
+								(dir + 3) % 4,      -- Right
+								(dir + 1) % 4,      -- Left
+								(dir + 2) % 4,      -- Behind
+							}
 
-						for _, check_dir in ipairs(check_order) do
-							local dx, dy = ndirs[check_dir][1], ndirs[check_dir][2]
-							local tx, ty = x + dx, y + dy
-							
-							local obst = findallhere(tx, ty)
-							if (#obst == 0) then
-								-- move to the first empty space found like this
-								updatedir(unit.fixed, check_dir) -- for some reason wont move in the direction needed unless i do this
-								table.insert(moving_units, {unitid = unit.fixed, reason = "alone", state = 0, moves = 1, dir = check_dir, xpos = x, ypos = y})
-								break
+							for _, check_dir in ipairs(check_order) do
+								local dx, dy = ndirs[check_dir][1], ndirs[check_dir][2]
+								local tx, ty = x + dx, y + dy
+								
+								local obst = findallhere(tx, ty)
+								if (#obst == 0) then
+									-- move to the first empty space found like this
+									updatedir(unit.fixed, check_dir) -- for some reason wont move in the direction needed unless i do this
+									table.insert(moving_units, {unitid = unit.fixed, reason = "alone", state = 0, moves = 1, dir = check_dir, xpos = x, ypos = y})
+									break
+								end
 							end
 						end
 					end
@@ -435,31 +441,36 @@ function movecommand(ox,oy,dir_,playerid_,dir_2,no3d_)
 
 					-- find everything on same spot
 					if (#stuff == 1) then	-- theres only 1 object here
-						local ndirs = {
-							[0] = {1, 0},
-							[1] = {0, -1},
-							[2] = {-1, 0},
-							[3] = {0, 1}
-						}
+						-- if blind, just go forward
+						if (hasfeature(name, "is", "blind", unit.fixed, x, y) ~= nil) then
+							table.insert(moving_units, {unitid = unit.fixed, reason = "friend", state = 0, moves = 1, dir = dir, xpos = x, ypos = y})
+						else
+							local ndirs = {
+								[0] = {1, 0},
+								[1] = {0, -1},
+								[2] = {-1, 0},
+								[3] = {0, 1}
+							}
 
-						-- check in front of the object for any object, then to the right, then to the left, then behind
-						local check_order = {
-							dir,                -- Front
-							(dir + 3) % 4,      -- Right
-							(dir + 1) % 4,      -- Left
-							(dir + 2) % 4,      -- Behind
-						}
+							-- check in front of the object for any object, then to the right, then to the left, then behind
+							local check_order = {
+								dir,                -- Front
+								(dir + 3) % 4,      -- Right
+								(dir + 1) % 4,      -- Left
+								(dir + 2) % 4,      -- Behind
+							}
 
-						for _, check_dir in ipairs(check_order) do
-							local dx, dy = ndirs[check_dir][1], ndirs[check_dir][2]
-							local tx, ty = x + dx, y + dy
-							
-							local obst = findallhere(tx, ty)
-							if (#obst > 0) then
-								-- move to the first occupied space found like this
-								updatedir(unit.fixed, check_dir) -- for some reason wont move in the direction needed unless i do this
-								table.insert(moving_units, {unitid = unit.fixed, reason = "friend", state = 0, moves = 1, dir = check_dir, xpos = x, ypos = y})
-								break
+							for _, check_dir in ipairs(check_order) do
+								local dx, dy = ndirs[check_dir][1], ndirs[check_dir][2]
+								local tx, ty = x + dx, y + dy
+								
+								local obst = findallhere(tx, ty)
+								if (#obst > 0) then
+									-- move to the first occupied space found like this
+									updatedir(unit.fixed, check_dir) -- for some reason wont move in the direction needed unless i do this
+									table.insert(moving_units, {unitid = unit.fixed, reason = "friend", state = 0, moves = 1, dir = check_dir, xpos = x, ypos = y})
+									break
+								end
 							end
 						end
 					end
@@ -1186,7 +1197,8 @@ function check(unitid,x,y,dir,pulling_,reason)
 
 					-- NEW PART, act like the obstacle is STOP if we are ALONE
 					local wearealone = hasfeature(name,"is","alone",unitid,x,y)
-					if (wearealone ~= nil) then
+					local blind = hasfeature(name,"is","blind",unitid,x,y) -- if blind, dont block movement
+					if (wearealone ~= nil and blind == nil) then
 						isstop = true
 					end
 					-- END OF NEW PART
@@ -1269,7 +1281,8 @@ function check(unitid,x,y,dir,pulling_,reason)
 
 		-- New section: do not allow movement onto empty if FRIEND
 		local friend = hasfeature(name, "is", "friend", unitid, x, y)
-		if (friend ~= nil) then
+		local blind = hasfeature(name,"is","blind",unitid,x,y) -- if blind, dont block movement
+		if (friend ~= nil and blind == nil) then
 			valid = true -- override valid to true
 		end
 		-- End of new section

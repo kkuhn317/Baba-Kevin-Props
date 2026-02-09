@@ -29,6 +29,12 @@ formatobjlist() -- (C)
 table.insert(mod_hook_functions["effect_always"],
     function()
 
+		-- todo: make work for 3D
+		-- for now just dont do scaling if in 3D mode
+		if (spritedata.values[VISION] == 1) then
+			return
+		end
+
         -- set scale for all units based on big prop
         for i,unit in ipairs(units) do
             local name = getname(unit)

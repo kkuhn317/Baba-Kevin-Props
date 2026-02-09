@@ -60,7 +60,26 @@ Forward, Right, Left, Backward]],
             description = [[The object acts like both HOT and MELT.
 However, it does not destroy itself unless it is also HOT or MELT.]],
             thumbnail = "text_helt"
-        }
+        },
+        {
+            base_obj = "nou",
+            display_name = "No U",
+            text_type = 2,
+            author = "BookwormKevin",
+            description = [[If the object is about to get destroyed, the attacker is destroyed instead]],
+            thumbnail = "text_nou"
+        },
+        {
+            base_obj = "blind",
+            display_name = "Blind",
+            text_type = 2,
+            author = "BookwormKevin",
+            description = [[When an object is blind, it acts like it cannot see. This results in the following behavior:
+- the seeing condition is never true for it.
+- When the object is also 3D, the view will be empty
+- Follow and Fear will not work for the object
+- When the object is also alone/friend and wants to move, it will move straight forward instead of trying to find an open direction]],
 
+        }
     })
 end
